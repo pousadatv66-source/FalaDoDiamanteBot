@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0b0f17" />
+<title>Estúdio de Voz — DiamanteBot</title>
+<style>
+:root{--bg:#0b0f17;--card:#151b28;--border:#283246;--accent:#00d4ff;--accent2:#7c3aed;--text:#f1f5f9;--muted:#94a3b8}
+*{box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif;-webkit-tap-highlight-color:transparent}
+body{margin:0;padding:16px;background:var(--bg);color:var(--text);display:flex;justify-content:center}
+.app{width:100%;max-width:520px}
+h1{font-size:1.3rem;margin:0 0 4px;color:var(--accent)}
+.sub{font-size:.84rem;color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px}
+label{display:block;font-size:.82rem;color:var(--muted);margin-bottom:6px}
+textarea,select,input[type=text]{width:100%;background:#0b0f17;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:.95rem}
+textarea{min-height:120px;resize:vertical;line-height:1.4}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.preset{background:#0b0f17;border:1px solid var(--border);color:var(--text);padding:10px;border-radius:10px;font-size:.82rem;cursor:pointer;text-align:left}
+.preset.ativo{border-color:var(--accent);background:rgba(0,212,255,.14);font-weight:600}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.sl{margin-top:12px}.sl-top{display:flex;justify-content:space-between;font-size:.82rem}
+input[type=range]{width:100%;accent-color:var(--accent);margin-top:4px;height:28px}
+.btn{width:100%;padding:14px;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;background:linear-gradient(135deg,var(--accent2),var(--accent));color:#fff;margin-top:10px}
+.btn.sec{background:#1e293b;border:1px solid var(--accent);font-size:.9rem;padding:11px}
+.btn:disabled{opacity:.55;cursor:wait}
+.status{font-size:.83rem;color:var(--accent);margin-top:10px;min-height:20px;line-height:1.35}
+.item{border:1px solid var(--border);border-radius:12px;padding:10px;margin-top:10px;background:#0b0f17}
+.item p{margin:0 0 6px;font-size:.8rem;color:var(--muted)}
+audio{width:100%}
+.dl,.sh,.rm{display:block;text-align:center;text-decoration:none;border-radius:10px;padding:11px;margin-top:8px;font-weight:700;font-size:.9rem;cursor:pointer;border:none}
+.dl{background:#1e293b;color:#fff;border:1px solid var(--accent);word-break:break-all}
+.sh{background:#25D366;color:#000}
+.rm{background:transparent;color:var(--muted);font-weight:500;padding:6px}
+.chk{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>🎙️ Estúdio de Voz — DiamanteBot</h1>
+  <p class="sub">100% no navegador • Sem servidor, sem chave de API • MP3/WAV pronto para o WhatsApp</p>
+
+  <div class="card">
+    <label>1. Estilo de voz (todos pensados para soar agradáveis, sem aspereza)</label>
+    <div class="grid" id="presets"></div>
+    <button class="btn sec" id="btnUnica">🎲 Criar voz única aleatória</button>
+
+    <div class="row">
+      <div class="sl"><div class="sl-top"><span>Velocidade</span><span id="l-speed"></span></div><input type="range" id="speed" min="0.75" max="1.35" step="0.01"></div>
+      <div class="sl"><div class="sl-top"><span>Tom</span><span id="l-pitch"></span></div><input type="range" id="pitch" min="-500" max="500" step="10"></div>
+    </div>
+    <div class="row">
+      <div class="sl"><div class="sl-top"><span>Graves</span><span id="l-bass"></span></div><input type="range" id="bass" min="-10" max="10" step="1"></div>
+      <div class="sl"><div class="sl-top"><span>Agudos</span><span id="l-treble"></span></div><input type="range" id="treble" min="-10" max="10" step="1"></div>
+    </div>
+    <div class="row">
+      <div class="sl"><div class="sl-top"><span>Suavidade</span><span id="l-soft"></span></div><input type="range" id="soft" min="2500" max="9000" step="100"></div>
+      <div class="sl"><div class="sl-top"><span>Espaço (reverb)</span><span id="l-rev"></span></div><input type="range" id="rev" min="0" max="0.5" step="0.01"></div>
+    </div>
+    <label class="chk"><input type="checkbox" id="comp"> Voz uniforme (compressor suave)</label>
+
+    <div class="row" style="margin-top:12px">
+      <input type="text" id="nomeCustom" placeholder="Nome da minha voz">
+      <button class="btn sec" id="btnSalvar" style="margin-top:0">💾 Salvar voz</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>2. Textos do bot (cada linha vira um áudio separado)</label>
+    <textarea id="texto">Boa noite! Vou dormir só o suficiente para acordar no outro dia, porque se eu for inventar de botar meu sono em dia, eu entro em coma eterno.</textarea>
+    <label style="margin-top:10px">Formato</label>
+    <select id="formato"><option value="mp3">MP3 (melhor para WhatsApp)</option><option value="wav">WAV (sem compressão)</option></select>
+    <button class="btn" id="btnGerar">🔊 Gerar Áudio(s)</button>
+    <div class="status" id="status">Pronto. Na 1ª geração, a voz em português é baixada e fica no cache do navegador.</div>
+    <div id="lista"></div>
+  </div>
+</div>
+
+<script type="module">
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.4.0';
+env.allowLocalModels = false;
+env.useBrowserCache = true;
+
+const $ = id => document.getElementById(id);
+const P = (id, nome, speed, pitch, bass, treble, soft, rev, comp, fx = null) => ({ id, nome, speed, pitch, bass, treble, soft, rev, comp, fx });
+const PRESETS = [
+  P('acolhedor', '☕ Acolhedor', .97, -60, 4, -3, 5200, .10, true),
+  P('suave', '✨ Suave & Natural', 1, 0, 2, -2, 6000, .05, true),
+  P('calmo', '😌 Calmo & Sereno', .92, -80, 3, -3, 4800, .14, true),
+  P('zen', '🌿 Brisa Zen', .90, 40, 1, -4, 4500, .22, true),
+  P('veludo', '🎷 Veludo', .95, -180, 6, -4, 4200, .08, true),
+  P('amigo', '😊 Amigo Próximo', 1.05, 90, 1, -1, 6500, .04, true),
+  P('narrador', '📖 Narrador', .95, -150, 5, 1, 5000, .10, true),
+  P('sussurro', '🤫 Sussurro', .96, 60, -6, -5, 3500, .03, true),
+  P('grave', '🔊 Grave Profundo', .94, -320, 8, -4, 4500, .05, true),
+  P('agil', '⚡ Ágil', 1.12, 200, -3, 2, 7000, 0, true),
+  P('futurista', '🚀 Futurista IA', 1.06, 140, -2, 5, 8000, .15, true),
+  P('robo', '🤖 Robô Metálico', .98, -120, 4, 3, 6500, .12, false, { tipo: 'robo' }),
+  P('radio', '📻 Rádio AM', 1.02, 0, -5, 4, 9000, .06, true, { tipo: 'banda', f: 1200, q: .85 }),
+  P('telefone', '📞 Telefone', 1.04, 80, -8, 2, 9000, .01, true, { tipo: 'banda', f: 950, q: 1.3 })
+];
+
+const ctrl = { speed: $('speed'), pitch: $('pitch'), bass: $('bass'), treble: $('treble'), soft: $('soft'), rev: $('rev') };
+const fmt = {
+  speed: v => `${(+v).toFixed(2)}x`, pitch: v => (v > 0 ? '+' : '') + v,
+  bass: v => `${v > 0 ? '+' : ''}${v} dB`, treble: v => `${v > 0 ? '+' : ''}${v} dB`,
+  soft: v => `${(v / 1000).toFixed(1)} kHz`, rev: v => `${Math.round(v * 100)}%`
+};
+let fxAtual = null, ativoId = 'suave';
+let custom = [];
+try { custom = JSON.parse(localStorage.getItem('dbVozes') || '[]'); } catch {}
+
+let pitchOk = true;
+try { pitchOk = 'detune' in AudioBufferSourceNode.prototype; } catch { pitchOk = false; }
+if (!pitchOk) { ctrl.pitch.disabled = true; $('status').textContent = '⚠️ Seu navegador não controla o tom; o áudio sai sem alteração de pitch.'; }
+
+function atualizarLabels() { for (const k in ctrl) $('l-' + k).textContent = fmt[k](ctrl[k].value); }
+Object.values(ctrl).forEach(el => el.addEventListener('input', atualizarLabels));
+
+function aplicarPreset(p) {
+  for (const k in ctrl) ctrl[k].value = (k === 'pitch' && !pitchOk) ? 0 : p[k];
+  $('comp').checked = !!p.comp;
+  fxAtual = p.fx || null;
+  ativoId = p.id;
+  document.querySelectorAll('.preset').forEach(b => b.classList.toggle('ativo', b.dataset.id === p.id));
+  atualizarLabels();
+}
+
+function desenharPresets() {
+  const box = $('presets'); box.innerHTML = '';
+  [...PRESETS, ...custom].forEach(p => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'preset'; b.dataset.id = p.id; b.textContent = p.nome;
+    b.onclick = () => aplicarPreset(p);
+    if (p.id.startsWith('c_')) {
+      b.oncontextmenu = e => { e.preventDefault(); if (confirm(`Apagar "${p.nome}"?`)) { custom = custom.filter(c => c.id !== p.id); persistir(); desenharPresets(); } };
+      let t; b.ontouchstart = () => t = setTimeout(() => b.oncontextmenu({ preventDefault() {} }), 700);
+      b.ontouchend = b.ontouchmove = () => clearTimeout(t);
+    }
+    box.appendChild(b);
+  });
+  document.querySelectorAll('.preset').forEach(b => b.classList.toggle('ativo', b.dataset.id === ativoId));
+}
+function persistir() { try { localStorage.setItem('dbVozes', JSON.stringify(custom)); } catch {} }
+const lerAtual = () => ({
+  speed: +ctrl.speed.value, pitch: +ctrl.pitch.value, bass: +ctrl.bass.value, treble: +ctrl.treble.value,
+  soft: +ctrl.soft.value, rev: +ctrl.rev.value, comp: $('comp').checked, fx: fxAtual
+});
+
+$('btnSalvar').onclick = () => {
+  const nome = $('nomeCustom').value.trim() || `Voz ${custom.length + 1}`;
+  const p = { id: 'c_' + Date.now(), nome: '⭐ ' + nome, ...lerAtual() };
+  custom.push(p); persistir(); desenharPresets(); aplicarPreset(p); $('nomeCustom').value = '';
+  $('status').textContent = `💾 Voz "${nome}" salva (segure/clique direito para apagar).`;
+};
+
+const rnd = (a, b, passo = 1) => Math.round((a + Math.random() * (b - a)) / passo) * passo;
+$('btnUnica').onclick = () => {
+  const p = { id: 'tmp', speed: rnd(.9, 1.06, .01), pitch: pitchOk ? rnd(-260, 220, 10) : 0, bass: rnd(-2, 6), treble: rnd(-5, 1),
+              soft: rnd(3800, 6800, 100), rev: rnd(0, .2, .01), comp: true, fx: null };
+  aplicarPreset(p);
+  $('status').textContent = '🎲 Voz nova criada! Gere o áudio e, se gostar, dê um nome e clique em Salvar.';
+};
+
+// ---------- Texto e áudio ----------
+function gerarNomeArquivo(t, n) {
+  const l = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim().split(/\s+/).slice(0, 4).join('-').slice(0, 40);
+  return `${l || 'voz-diamantebot'}${n ? '-' + n : ''}`;
+}
+function dividirTexto(t, lim = 150) {
+  const frases = t.match(/[^.!?]+[.!?]*/g) || [t]; const out = []; let at = '';
+  for (const f of frases) {
+    if ((at + f).length > lim) { if (at.trim()) out.push(at.trim()); at = f; } else at += ' ' + f;
+  }
+  if (at.trim()) out.push(at.trim());
+  return out;
+}
+function fade(a, sr, ms = 8) {
+  const n = Math.min(Math.floor(sr * ms / 1000), Math.floor(a.length / 2));
+  for (let i = 0; i < n; i++) { const f = i / n; a[i] *= f; a[a.length - 1 - i] *= f; }
+  return a;
+}
+function juntar(audios, pausaMs = 180) {
+  const sr = audios[0].sampling_rate || 16000, pausa = Math.floor(sr * pausaMs / 1000);
+  const total = audios.reduce((s, a, i) => s + a.audio.length + (i < audios.length - 1 ? pausa : 0), 0);
+  const r = new Float32Array(total); let o = 0;
+  audios.forEach((a, i) => { r.set(a.audio, o); o += a.audio.length + (i < audios.length - 1 ? pausa : 0); });
+  return { audio: r, sampling_rate: sr };
+}
+
+function criarIR(ctx, seg = 1.3) {
+  const len = Math.floor(ctx.sampleRate * seg), buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+  return buf;
+}
+
+async function processarVoz(audio, sr, c) {
+  const OUT = 24000;
+  const taxa = c.speed * (pitchOk ? Math.pow(2, c.pitch / 1200) : 1);
+  const dur = audio.length / sr / taxa + (c.rev > 0 ? 1.4 : .15);
+  const ctx = new OfflineAudioContext(1, Math.ceil(dur * OUT), OUT);
+
+  const buf = ctx.createBuffer(1, audio.length, sr); buf.copyToChannel(audio, 0);
+  const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = c.speed;
+  if (pitchOk) src.detune.value = c.pitch;
+
+  let no = src;
+  const ligar = n => { no.connect(n); no = n; };
+  const filtro = (type, f, gain = 0, q = 1) => { const n = ctx.createBiquadFilter(); n.type = type; n.frequency.value = f; n.gain.value = gain; n.Q.value = q; ligar(n); };
+
+  if (c.bass) filtro('lowshelf', 220, c.bass);
+  if (c.treble) filtro('highshelf', 2600, c.treble);
+  filtro('peaking', 3200, -2, 1);          // tira a aspereza típica da voz sintética
+  filtro('highpass', 70);                  // remove ruído grave
+
+  if (c.fx?.tipo === 'robo') {
+    const osc = ctx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = 48;
+    const mod = ctx.createGain(); mod.gain.value = .45;
+    const ring = ctx.createGain(); ring.gain.value = .85;
+    osc.connect(mod); mod.connect(ring.gain); osc.start(0);
+    ligar(ring); filtro('bandpass', 1400, 0, 1.4);
+  } else if (c.fx?.tipo === 'banda') {
+    filtro('bandpass', c.fx.f, 0, c.fx.q);
+  }
+
+  filtro('lowpass', c.soft);               // "Suavidade": corta agudos duros
+
+  if (c.comp) {
+    const k = ctx.createDynamicsCompressor();
+    k.threshold.value = -28; k.knee.value = 20; k.ratio.value = 3; k.attack.value = .01; k.release.value = .2;
+    ligar(k);
+  }
+
+  no.connect(ctx.destination);
+  if (c.rev > 0) {
+    const conv = ctx.createConvolver(); conv.buffer = criarIR(ctx);
+    const wet = ctx.createGain(); wet.gain.value = c.rev;
+    no.connect(conv); conv.connect(wet); wet.connect(ctx.destination);
+  }
+  src.start(0);
+  const out = await ctx.startRendering();
+
+  // normaliza o volume para ~-1 dB (compressor e filtros mudam o nível)
+  const d = out.getChannelData(0); let pico = 0;
+  for (let i = 0; i < d.length; i++) pico = Math.max(pico, Math.abs(d[i]));
+  if (pico > 0) { const g = .89 / pico; for (let i = 0; i < d.length; i++) d[i] *= g; }
+  return out;
+}
+
+function paraWav(buffer) {
+  const s = buffer.getChannelData(0), sr = buffer.sampleRate, len = s.length * 2;
+  const ab = new ArrayBuffer(44 + len), v = new DataView(ab);
+  const w = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + len, true); w(8, 'WAVE'); w(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, len, true);
+  for (let i = 0, o = 44; i < s.length; i++, o += 2) { const x = Math.max(-1, Math.min(1, s[i])); v.setInt16(o, x < 0 ? x * 0x8000 : x * 0x7FFF, true); }
+  return new Blob([ab], { type: 'audio/wav' });
+}
+
+let lamePromise = null;
+function carregarLame() {
+  if (window.lamejs) return Promise.resolve();
+  return lamePromise ||= new Promise((ok, erro) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js';
+    s.onload = ok; s.onerror = () => { lamePromise = null; erro(new Error('lamejs')); };
+    document.head.appendChild(s);
+  });
+}
+async function paraMp3(buffer) {
+  await carregarLame();
+  const f = buffer.getChannelData(0), pcm = new Int16Array(f.length);
+  for (let i = 0; i < f.length; i++) { const x = Math.max(-1, Math.min(1, f[i])); pcm[i] = x < 0 ? x * 0x8000 : x * 0x7FFF; }
+  const enc = new lamejs.Mp3Encoder(1, buffer.sampleRate, 96), partes = [];
+  for (let i = 0; i < pcm.length; i += 1152) { const b = enc.encodeBuffer(pcm.subarray(i, i + 1152)); if (b.length) partes.push(b); }
+  const fim = enc.flush(); if (fim.length) partes.push(fim);
+  return new Blob(partes, { type: 'audio/mpeg' });
+}
+
+// ---------- Lista de resultados ----------
+function adicionarItem(blob, nome, ext, trecho) {
+  const url = URL.createObjectURL(blob), arquivo = `${nome}.${ext}`;
+  const el = document.createElement('div'); el.className = 'item';
+  el.innerHTML = '<p></p><audio controls preload="metadata"></audio><a class="dl"></a><button type="button" class="sh">📤 Compartilhar no WhatsApp</button><button type="button" class="rm">remover</button>';
+  el.querySelector('p').textContent = `"${trecho.slice(0, 80)}${trecho.length > 80 ? '…' : ''}"`;
+  el.querySelector('audio').src = url;
+  const a = el.querySelector('.dl'); a.href = url; a.download = arquivo; a.textContent = `⬇️ Salvar (${arquivo})`;
+  el.querySelector('.sh').onclick = async () => {
+    const file = new File([blob], arquivo, { type: blob.type });
+    if (navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: arquivo }); }
+      catch (e) { if (e.name !== 'AbortError') a.click(); }
+    } else { $('status').textContent = '⚠️ Compartilhamento direto não suportado aqui. Salvando no dispositivo...'; a.click(); }
+  };
+  el.querySelector('.rm').onclick = () => { URL.revokeObjectURL(url); el.remove(); };
+  $('lista').prepend(el);
+}
+
+// ---------- Geração ----------
+let sint = null;
+$('btnGerar').onclick = async () => {
+  const linhas = $('texto').value.split('\n').map(l => l.trim()).filter(Boolean);
+  const st = $('status'), btn = $('btnGerar');
+  if (!linhas.length) { st.textContent = 'Digite algum texto antes de gerar.'; return; }
+  if (!window.OfflineAudioContext) { st.textContent = '❌ Seu navegador não suporta processamento de áudio.'; return; }
+
+  btn.disabled = true;
+  try {
+    if (!sint) {
+      st.textContent = '⏳ Baixando modelo de voz em português (só na 1ª vez)...';
+      sint = await pipeline('text-to-speech', 'Xenova/mms-tts-por', {
+        device: 'wasm',
+        progress_callback: i => {
+          if (i.status === 'progress' && i.progress) st.textContent = `⏳ Baixando voz: ${Math.round(i.progress)}%`;
+        }
+      });
+    }
+    const cfg = lerAtual(), formato = $('formato').value;
+    for (let n = 0; n < linhas.length; n++) {
+      const partes = dividirTexto(linhas[n]), audios = [];
+      for (let i = 0; i < partes.length; i++) {
+        st.textContent = `🎙️ Áudio ${n + 1}/${linhas.length} — parte ${i + 1}/${partes.length}...`;
+        const s = await sint(partes[i]);
+        s.audio = fade(s.audio, s.sampling_rate);
+        audios.push(s);
+      }
+      const j = juntar(audios);
+      st.textContent = `🎛️ Aplicando timbre e efeitos (${n + 1}/${linhas.length})...`;
+      const buf = await processarVoz(j.audio, j.sampling_rate, cfg);
+      let blob, ext = formato;
+      if (formato === 'mp3') {
+        try { blob = await paraMp3(buf); }
+        catch { blob = paraWav(buf); ext = 'wav'; st.textContent = '⚠️ Não consegui carregar o conversor MP3; usei WAV.'; }
+      } else blob = paraWav(buf);
+      adicionarItem(blob, gerarNomeArquivo(linhas[n], linhas.length > 1 ? n + 1 : 0), ext, linhas[n]);
+    }
+    st.textContent = `✅ ${linhas.length} áudio(s) pronto(s)!`;
+  } catch (e) {
+    console.error(e);
+    st.textContent = `❌ Erro: ${e.message}`;
+  } finally { btn.disabled = false; }
+};
+
+desenharPresets();
+aplicarPreset(PRESETS[1]);
+</script>
+</body>
+</html>
