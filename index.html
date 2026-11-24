@@ -34,6 +34,9 @@ audio{width:100%}
 .sh{background:#25D366;color:#000}
 .rm{background:transparent;color:var(--muted);font-weight:500;padding:6px}
 .chk{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:.85rem}
+.lote h3{font-size:.85rem;color:var(--accent);margin:16px 0 0;font-weight:600}
+.us{display:block;width:100%;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:9px;margin-top:8px;font-size:.85rem;cursor:pointer}
+.preset.ativo::after{content:' ✓'}
 </style>
 </head>
 <body>
@@ -43,6 +46,7 @@ audio{width:100%}
 
   <div class="card">
     <label>1. Estilo de voz (todos pensados para soar agradáveis, sem aspereza)</label>
+    <label class="chk" style="margin:0 0 10px"><input type="checkbox" id="multi"> Modo comparar: marque várias vozes e gere todas de uma vez</label>
     <div class="grid" id="presets"></div>
     <button class="btn sec" id="btnUnica">🎲 Criar voz única aleatória</button>
 
@@ -83,6 +87,7 @@ env.allowLocalModels = false;
 env.useBrowserCache = true;
 
 const $ = id => document.getElementById(id);
+window.addEventListener('unhandledrejection', e => { $('status').textContent = '❌ ' + (e.reason?.message || e.reason); $('btnGerar').disabled = false; });
 const P = (id, nome, speed, pitch, bass, treble, soft, rev, comp, fx = null) => ({ id, nome, speed, pitch, bass, treble, soft, rev, comp, fx });
 const PRESETS = [
   P('acolhedor', '☕ Acolhedor', .97, -60, 4, -3, 5200, .10, true),
@@ -108,6 +113,11 @@ const fmt = {
   soft: v => `${(v / 1000).toFixed(1)} kHz`, rev: v => `${Math.round(v * 100)}%`
 };
 let fxAtual = null, ativoId = 'suave';
+const sel = new Set(), baseCache = new Map();
+function marcar() {
+  const m = $('multi').checked;
+  document.querySelectorAll('.preset').forEach(b => b.classList.toggle('ativo', m ? sel.has(b.dataset.id) : b.dataset.id === ativoId));
+}
 let custom = [];
 try { custom = JSON.parse(localStorage.getItem('dbVozes') || '[]'); } catch {}
 
@@ -123,7 +133,7 @@ function aplicarPreset(p) {
   $('comp').checked = !!p.comp;
   fxAtual = p.fx || null;
   ativoId = p.id;
-  document.querySelectorAll('.preset').forEach(b => b.classList.toggle('ativo', b.dataset.id === p.id));
+  marcar();
   atualizarLabels();
 }
 
@@ -132,7 +142,7 @@ function desenharPresets() {
   [...PRESETS, ...custom].forEach(p => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'preset'; b.dataset.id = p.id; b.textContent = p.nome;
-    b.onclick = () => aplicarPreset(p);
+    b.onclick = () => { if ($('multi').checked) { sel.has(p.id) ? sel.delete(p.id) : sel.add(p.id); marcar(); } else aplicarPreset(p); };
     if (p.id.startsWith('c_')) {
       b.oncontextmenu = e => { e.preventDefault(); if (confirm(`Apagar "${p.nome}"?`)) { custom = custom.filter(c => c.id !== p.id); persistir(); desenharPresets(); } };
       let t; b.ontouchstart = () => t = setTimeout(() => b.oncontextmenu({ preventDefault() {} }), 700);
@@ -140,8 +150,9 @@ function desenharPresets() {
     }
     box.appendChild(b);
   });
-  document.querySelectorAll('.preset').forEach(b => b.classList.toggle('ativo', b.dataset.id === ativoId));
+  marcar();
 }
+$('multi').onchange = () => { sel.clear(); if ($('multi').checked) sel.add(ativoId); marcar(); };
 function persistir() { try { localStorage.setItem('dbVozes', JSON.stringify(custom)); } catch {} }
 const lerAtual = () => ({
   speed: +ctrl.speed.value, pitch: +ctrl.pitch.value, bass: +ctrl.bass.value, treble: +ctrl.treble.value,
@@ -281,12 +292,14 @@ async function paraMp3(buffer) {
 }
 
 // ---------- Lista de resultados ----------
-function adicionarItem(blob, nome, ext, trecho) {
+function adicionarItem(lote, blob, nome, ext, cfg) {
   const url = URL.createObjectURL(blob), arquivo = `${nome}.${ext}`;
   const el = document.createElement('div'); el.className = 'item';
-  el.innerHTML = '<p></p><audio controls preload="metadata"></audio><a class="dl"></a><button type="button" class="sh">📤 Compartilhar no WhatsApp</button><button type="button" class="rm">remover</button>';
-  el.querySelector('p').textContent = `"${trecho.slice(0, 80)}${trecho.length > 80 ? '…' : ''}"`;
-  el.querySelector('audio').src = url;
+  el.innerHTML = '<p></p><audio controls preload="metadata"></audio><a class="dl"></a><button type="button" class="us">🎚️ Usar esta voz nos controles</button><button type="button" class="sh">📤 Compartilhar no WhatsApp</button><button type="button" class="rm">remover</button>';
+  el.querySelector('p').textContent = cfg.nome;
+  const au = el.querySelector('audio'); au.src = url;
+  au.addEventListener('play', () => document.querySelectorAll('#lista audio').forEach(x => { if (x !== au) x.pause(); }));
+  el.querySelector('.us').onclick = () => { aplicarPreset(cfg); $('status').textContent = `🎚️ Controles ajustados para "${cfg.nome}". Pode salvar com um nome.`; };
   const a = el.querySelector('.dl'); a.href = url; a.download = arquivo; a.textContent = `⬇️ Salvar (${arquivo})`;
   el.querySelector('.sh').onclick = async () => {
     const file = new File([blob], arquivo, { type: blob.type });
@@ -296,7 +309,7 @@ function adicionarItem(blob, nome, ext, trecho) {
     } else { $('status').textContent = '⚠️ Compartilhamento direto não suportado aqui. Salvando no dispositivo...'; a.click(); }
   };
   el.querySelector('.rm').onclick = () => { URL.revokeObjectURL(url); el.remove(); };
-  $('lista').prepend(el);
+  lote.appendChild(el);
 }
 
 // ---------- Geração ----------
@@ -311,15 +324,29 @@ $('btnGerar').onclick = async () => {
   try {
     if (!sint) {
       st.textContent = '⏳ Baixando modelo de voz em português (só na 1ª vez)...';
+      const arqs = {};
+      const wd = setTimeout(() => { st.textContent = '⏳ Ainda iniciando o motor de voz... se passar de 3 min, recarregue a página (o download fica em cache).'; }, 120000);
       sint = await pipeline('text-to-speech', 'Xenova/mms-tts-por', {
         device: 'wasm',
         progress_callback: i => {
-          if (i.status === 'progress' && i.progress) st.textContent = `⏳ Baixando voz: ${Math.round(i.progress)}%`;
+          if (i.status === 'progress' && i.total) {
+            arqs[i.file] = { l: i.loaded, t: i.total };
+            let l = 0, t = 0; for (const k in arqs) { l += arqs[k].l; t += arqs[k].t; }
+            st.textContent = `⏳ Baixando voz: ${Math.round(l / t * 100)}% (${(l / 1048576).toFixed(0)} de ${(t / 1048576).toFixed(0)} MB)`;
+          } else if (i.status === 'done') {
+            if (arqs[i.file]) arqs[i.file].l = arqs[i.file].t;
+            if (Object.values(arqs).every(a => a.l >= a.t)) st.textContent = '⚙️ Download concluído. Iniciando o motor de voz... (pode levar 1–2 min no celular, aguarde)';
+          } else if (i.status === 'ready') st.textContent = '✅ Motor de voz pronto!';
         }
       });
+      clearTimeout(wd);
     }
-    const cfg = lerAtual(), formato = $('formato').value;
+    const formato = $('formato').value, todas = [...PRESETS, ...custom];
+    let cfgs = $('multi').checked ? todas.filter(p => sel.has(p.id)) : [];
+    if (!cfgs.length) cfgs = [{ id: ativoId, nome: (todas.find(p => p.id === ativoId) || { nome: '🎲 Voz única' }).nome, ...lerAtual() }];
     for (let n = 0; n < linhas.length; n++) {
+      let j = baseCache.get(linhas[n]);
+      if (!j) {
       const partes = dividirTexto(linhas[n]), audios = [];
       for (let i = 0; i < partes.length; i++) {
         st.textContent = `🎙️ Áudio ${n + 1}/${linhas.length} — parte ${i + 1}/${partes.length}...`;
@@ -327,17 +354,26 @@ $('btnGerar').onclick = async () => {
         s.audio = fade(s.audio, s.sampling_rate);
         audios.push(s);
       }
-      const j = juntar(audios);
-      st.textContent = `🎛️ Aplicando timbre e efeitos (${n + 1}/${linhas.length})...`;
-      const buf = await processarVoz(j.audio, j.sampling_rate, cfg);
-      let blob, ext = formato;
-      if (formato === 'mp3') {
-        try { blob = await paraMp3(buf); }
-        catch { blob = paraWav(buf); ext = 'wav'; st.textContent = '⚠️ Não consegui carregar o conversor MP3; usei WAV.'; }
-      } else blob = paraWav(buf);
-      adicionarItem(blob, gerarNomeArquivo(linhas[n], linhas.length > 1 ? n + 1 : 0), ext, linhas[n]);
+      j = juntar(audios);
+      if (baseCache.size > 20) baseCache.clear();
+      baseCache.set(linhas[n], j);
+      }
+      const lote = document.createElement('div'); lote.className = 'lote';
+      const h = document.createElement('h3'); h.textContent = `"${linhas[n].slice(0, 60)}${linhas[n].length > 60 ? '…' : ''}"`;
+      lote.appendChild(h); $('lista').prepend(lote);
+      for (const cfg of cfgs) {
+        st.textContent = `🎛️ ${cfg.nome} (texto ${n + 1}/${linhas.length})...`;
+        const buf = await processarVoz(j.audio, j.sampling_rate, cfg);
+        let blob, ext = formato;
+        if (formato === 'mp3') {
+          try { blob = await paraMp3(buf); }
+          catch { blob = paraWav(buf); ext = 'wav'; }
+        } else blob = paraWav(buf);
+        const nome = `${gerarNomeArquivo(linhas[n], linhas.length > 1 ? n + 1 : 0)}-${gerarNomeArquivo(cfg.nome, 0)}`;
+        adicionarItem(lote, blob, nome, ext, cfg);
+      }
     }
-    st.textContent = `✅ ${linhas.length} áudio(s) pronto(s)!`;
+    st.textContent = `✅ ${linhas.length * cfgs.length} áudio(s) pronto(s)! Toque em um por vez para comparar e baixe o melhor.`;
   } catch (e) {
     console.error(e);
     st.textContent = `❌ Erro: ${e.message}`;
