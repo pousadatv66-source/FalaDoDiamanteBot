@@ -4,10 +4,15 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="theme-color" content="#0b0f17" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon-192.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
 <title>Estúdio de Voz — DiamanteBot</title>
 <style>
 :root{--bg:#0b0f17;--card:#151b28;--border:#283246;--accent:#00d4ff;--accent2:#7c3aed;--text:#f1f5f9;--muted:#94a3b8}
 *{box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif;-webkit-tap-highlight-color:transparent}
+html{touch-action:manipulation}
+[hidden]{display:none!important}
 body{margin:0;padding:16px;background:var(--bg);color:var(--text);display:flex;justify-content:center}
 .app{width:100%;max-width:520px}
 h1{font-size:1.3rem;margin:0 0 4px;color:var(--accent)}
@@ -19,6 +24,7 @@ textarea{min-height:120px;resize:vertical;line-height:1.4}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .preset{background:#0b0f17;border:1px solid var(--border);color:var(--text);padding:10px;border-radius:10px;font-size:.82rem;cursor:pointer;text-align:left}
 .preset.ativo{border-color:var(--accent);background:rgba(0,212,255,.14);font-weight:600}
+.preset.ativo::after{content:' ✓'}
 .row{display:flex;gap:8px}.row>*{flex:1}
 .sl{margin-top:12px}.sl-top{display:flex;justify-content:space-between;font-size:.82rem}
 input[type=range]{width:100%;accent-color:var(--accent);margin-top:4px;height:28px}
@@ -26,23 +32,25 @@ input[type=range]{width:100%;accent-color:var(--accent);margin-top:4px;height:28
 .btn.sec{background:#1e293b;border:1px solid var(--accent);font-size:.9rem;padding:11px}
 .btn:disabled{opacity:.55;cursor:wait}
 .status{font-size:.83rem;color:var(--accent);margin-top:10px;min-height:20px;line-height:1.35}
+.bar{height:10px;background:#0b0f17;border:1px solid var(--border);border-radius:8px;margin-top:10px;overflow:hidden}
+.bar div{height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width .25s}
 .item{border:1px solid var(--border);border-radius:12px;padding:10px;margin-top:10px;background:#0b0f17}
 .item p{margin:0 0 6px;font-size:.8rem;color:var(--muted)}
 audio{width:100%}
-.dl,.sh,.rm{display:block;text-align:center;text-decoration:none;border-radius:10px;padding:11px;margin-top:8px;font-weight:700;font-size:.9rem;cursor:pointer;border:none}
+.dl,.sh,.rm{display:block;text-align:center;text-decoration:none;border-radius:10px;padding:11px;margin-top:8px;font-weight:700;font-size:.9rem;cursor:pointer;border:none;width:100%}
 .dl{background:#1e293b;color:#fff;border:1px solid var(--accent);word-break:break-all}
 .sh{background:#25D366;color:#000}
 .rm{background:transparent;color:var(--muted);font-weight:500;padding:6px}
+.us{display:block;width:100%;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:9px;margin-top:8px;font-size:.85rem;cursor:pointer}
 .chk{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:.85rem}
 .lote h3{font-size:.85rem;color:var(--accent);margin:16px 0 0;font-weight:600}
-.us{display:block;width:100%;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:9px;margin-top:8px;font-size:.85rem;cursor:pointer}
-.preset.ativo::after{content:' ✓'}
 </style>
 </head>
 <body>
 <div class="app">
   <h1>🎙️ Estúdio de Voz — DiamanteBot</h1>
   <p class="sub">100% no navegador • Sem servidor, sem chave de API • MP3/WAV pronto para o WhatsApp</p>
+  <button class="btn sec" id="btnInstalar" hidden style="margin:0 0 14px">📲 Instalar como aplicativo</button>
 
   <div class="card">
     <label>1. Estilo de voz (todos pensados para soar agradáveis, sem aspereza)</label>
@@ -76,18 +84,58 @@ audio{width:100%}
     <label style="margin-top:10px">Formato</label>
     <select id="formato"><option value="mp3">MP3 (melhor para WhatsApp)</option><option value="wav">WAV (sem compressão)</option></select>
     <button class="btn" id="btnGerar">🔊 Gerar Áudio(s)</button>
-    <div class="status" id="status">Pronto. Na 1ª geração, a voz em português é baixada e fica no cache do navegador.</div>
+    <div class="bar" id="barraBox" hidden><div id="fill"></div></div>
+    <div class="status" id="status">⏳ Preparando a voz em segundo plano...</div>
     <div id="lista"></div>
   </div>
 </div>
 
 <script type="module">
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.4.0';
-env.allowLocalModels = false;
-env.useBrowserCache = true;
-
 const $ = id => document.getElementById(id);
-window.addEventListener('unhandledrejection', e => { $('status').textContent = '❌ ' + (e.reason?.message || e.reason); $('btnGerar').disabled = false; });
+const st = $('status');
+window.addEventListener('unhandledrejection', e => { st.textContent = '❌ ' + (e.reason?.message || e.reason); $('btnGerar').disabled = false; setBar(null); });
+
+function setBar(p) { $('barraBox').hidden = p == null; if (p != null) $('fill').style.width = Math.round(Math.min(1, p) * 100) + '%'; }
+
+// ---------- PWA ----------
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+let promptInstalar = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); promptInstalar = e; $('btnInstalar').hidden = false; });
+$('btnInstalar').onclick = async () => { if (!promptInstalar) return; promptInstalar.prompt(); await promptInstalar.userChoice; promptInstalar = null; $('btnInstalar').hidden = true; };
+window.addEventListener('appinstalled', () => { $('btnInstalar').hidden = true; });
+
+// ---------- Worker de voz (não trava a tela) ----------
+const worker = new Worker('tts-worker.js', { type: 'module' });
+const pend = new Map(); let seq = 0; const arqs = {};
+worker.onmessage = e => {
+  const m = e.data;
+  if (m.t === 'prog') return onProg(m.i);
+  const p = pend.get(m.id); if (!p) return;
+  pend.delete(m.id);
+  m.t === 'err' ? p.erro(new Error(m.msg)) : p.ok(m);
+};
+worker.onerror = e => { st.textContent = '❌ Erro ao iniciar o motor de voz. Recarregue a página.'; setBar(null); };
+const chamar = msg => new Promise((ok, erro) => { pend.set(msg.id, { ok, erro }); worker.postMessage(msg); });
+
+function onProg(i) {
+  if (i.status === 'progress' && i.total) {
+    arqs[i.file] = { l: i.loaded, t: i.total };
+    let l = 0, t = 0; for (const k in arqs) { l += arqs[k].l; t += arqs[k].t; }
+    setBar(l / t);
+    st.textContent = `⏳ Baixando voz (só na 1ª vez): ${Math.round(l / t * 100)}% (${(l / 1048576).toFixed(0)} de ${(t / 1048576).toFixed(0)} MB)`;
+  } else if (i.status === 'done') {
+    if (arqs[i.file]) arqs[i.file].l = arqs[i.file].t;
+    if (Object.values(arqs).every(a => a.l >= a.t)) { setBar(1); st.textContent = '⚙️ Download concluído. Iniciando o motor de voz... (1–2 min no celular)'; }
+  }
+}
+let modeloP = null;
+function carregarModelo() {
+  return modeloP ||= chamar({ t: 'load', id: 'load' + (++seq) }).catch(e => { modeloP = null; throw e; });
+}
+carregarModelo().then(() => { setBar(null); st.textContent = '✅ Voz pronta! Escolha o estilo e toque em Gerar.'; })
+  .catch(e => { setBar(null); st.textContent = `❌ Não consegui preparar a voz: ${e.message}. Toque em Gerar para tentar de novo.`; });
+
+// ---------- Vozes ----------
 const P = (id, nome, speed, pitch, bass, treble, soft, rev, comp, fx = null) => ({ id, nome, speed, pitch, bass, treble, soft, rev, comp, fx });
 const PRESETS = [
   P('acolhedor', '☕ Acolhedor', .97, -60, 4, -3, 5200, .10, true),
@@ -112,31 +160,28 @@ const fmt = {
   bass: v => `${v > 0 ? '+' : ''}${v} dB`, treble: v => `${v > 0 ? '+' : ''}${v} dB`,
   soft: v => `${(v / 1000).toFixed(1)} kHz`, rev: v => `${Math.round(v * 100)}%`
 };
-let fxAtual = null, ativoId = 'suave';
+let fxAtual = null, ativoId = 'suave', custom = [];
 const sel = new Set(), baseCache = new Map();
-function marcar() {
-  const m = $('multi').checked;
-  document.querySelectorAll('.preset').forEach(b => b.classList.toggle('ativo', m ? sel.has(b.dataset.id) : b.dataset.id === ativoId));
-}
-let custom = [];
 try { custom = JSON.parse(localStorage.getItem('dbVozes') || '[]'); } catch {}
 
 let pitchOk = true;
 try { pitchOk = 'detune' in AudioBufferSourceNode.prototype; } catch { pitchOk = false; }
-if (!pitchOk) { ctrl.pitch.disabled = true; $('status').textContent = '⚠️ Seu navegador não controla o tom; o áudio sai sem alteração de pitch.'; }
+if (!pitchOk) ctrl.pitch.disabled = true;
 
+function marcar() {
+  const m = $('multi').checked;
+  document.querySelectorAll('.preset').forEach(b => b.classList.toggle('ativo', m ? sel.has(b.dataset.id) : b.dataset.id === ativoId));
+}
 function atualizarLabels() { for (const k in ctrl) $('l-' + k).textContent = fmt[k](ctrl[k].value); }
 Object.values(ctrl).forEach(el => el.addEventListener('input', atualizarLabels));
 
 function aplicarPreset(p) {
   for (const k in ctrl) ctrl[k].value = (k === 'pitch' && !pitchOk) ? 0 : p[k];
   $('comp').checked = !!p.comp;
-  fxAtual = p.fx || null;
-  ativoId = p.id;
-  marcar();
-  atualizarLabels();
+  fxAtual = p.fx || null; ativoId = p.id;
+  marcar(); atualizarLabels();
 }
-
+function persistir() { try { localStorage.setItem('dbVozes', JSON.stringify(custom)); } catch {} }
 function desenharPresets() {
   const box = $('presets'); box.innerHTML = '';
   [...PRESETS, ...custom].forEach(p => {
@@ -144,8 +189,9 @@ function desenharPresets() {
     b.type = 'button'; b.className = 'preset'; b.dataset.id = p.id; b.textContent = p.nome;
     b.onclick = () => { if ($('multi').checked) { sel.has(p.id) ? sel.delete(p.id) : sel.add(p.id); marcar(); } else aplicarPreset(p); };
     if (p.id.startsWith('c_')) {
-      b.oncontextmenu = e => { e.preventDefault(); if (confirm(`Apagar "${p.nome}"?`)) { custom = custom.filter(c => c.id !== p.id); persistir(); desenharPresets(); } };
-      let t; b.ontouchstart = () => t = setTimeout(() => b.oncontextmenu({ preventDefault() {} }), 700);
+      const apagar = () => { if (confirm(`Apagar "${p.nome}"?`)) { custom = custom.filter(c => c.id !== p.id); sel.delete(p.id); persistir(); desenharPresets(); } };
+      b.oncontextmenu = e => { e.preventDefault(); apagar(); };
+      let t; b.ontouchstart = () => t = setTimeout(apagar, 700);
       b.ontouchend = b.ontouchmove = () => clearTimeout(t);
     }
     box.appendChild(b);
@@ -153,7 +199,6 @@ function desenharPresets() {
   marcar();
 }
 $('multi').onchange = () => { sel.clear(); if ($('multi').checked) sel.add(ativoId); marcar(); };
-function persistir() { try { localStorage.setItem('dbVozes', JSON.stringify(custom)); } catch {} }
 const lerAtual = () => ({
   speed: +ctrl.speed.value, pitch: +ctrl.pitch.value, bass: +ctrl.bass.value, treble: +ctrl.treble.value,
   soft: +ctrl.soft.value, rev: +ctrl.rev.value, comp: $('comp').checked, fx: fxAtual
@@ -163,15 +208,13 @@ $('btnSalvar').onclick = () => {
   const nome = $('nomeCustom').value.trim() || `Voz ${custom.length + 1}`;
   const p = { id: 'c_' + Date.now(), nome: '⭐ ' + nome, ...lerAtual() };
   custom.push(p); persistir(); desenharPresets(); aplicarPreset(p); $('nomeCustom').value = '';
-  $('status').textContent = `💾 Voz "${nome}" salva (segure/clique direito para apagar).`;
+  st.textContent = `💾 Voz "${nome}" salva (segure o dedo no botão dela para apagar).`;
 };
-
 const rnd = (a, b, passo = 1) => Math.round((a + Math.random() * (b - a)) / passo) * passo;
 $('btnUnica').onclick = () => {
-  const p = { id: 'tmp', speed: rnd(.9, 1.06, .01), pitch: pitchOk ? rnd(-260, 220, 10) : 0, bass: rnd(-2, 6), treble: rnd(-5, 1),
-              soft: rnd(3800, 6800, 100), rev: rnd(0, .2, .01), comp: true, fx: null };
-  aplicarPreset(p);
-  $('status').textContent = '🎲 Voz nova criada! Gere o áudio e, se gostar, dê um nome e clique em Salvar.';
+  aplicarPreset({ id: 'tmp', speed: rnd(.9, 1.06, .01), pitch: pitchOk ? rnd(-260, 220, 10) : 0, bass: rnd(-2, 6), treble: rnd(-5, 1),
+                  soft: rnd(3800, 6800, 100), rev: rnd(0, .2, .01), comp: true, fx: null });
+  st.textContent = '🎲 Voz nova criada! Gere o áudio e, se gostar, dê um nome e toque em Salvar.';
 };
 
 // ---------- Texto e áudio ----------
@@ -199,7 +242,6 @@ function juntar(audios, pausaMs = 180) {
   audios.forEach((a, i) => { r.set(a.audio, o); o += a.audio.length + (i < audios.length - 1 ? pausa : 0); });
   return { audio: r, sampling_rate: sr };
 }
-
 function criarIR(ctx, seg = 1.3) {
   const len = Math.floor(ctx.sampleRate * seg), buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
@@ -211,7 +253,6 @@ async function processarVoz(audio, sr, c) {
   const taxa = c.speed * (pitchOk ? Math.pow(2, c.pitch / 1200) : 1);
   const dur = audio.length / sr / taxa + (c.rev > 0 ? 1.4 : .15);
   const ctx = new OfflineAudioContext(1, Math.ceil(dur * OUT), OUT);
-
   const buf = ctx.createBuffer(1, audio.length, sr); buf.copyToChannel(audio, 0);
   const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = c.speed;
   if (pitchOk) src.detune.value = c.pitch;
@@ -222,27 +263,21 @@ async function processarVoz(audio, sr, c) {
 
   if (c.bass) filtro('lowshelf', 220, c.bass);
   if (c.treble) filtro('highshelf', 2600, c.treble);
-  filtro('peaking', 3200, -2, 1);          // tira a aspereza típica da voz sintética
-  filtro('highpass', 70);                  // remove ruído grave
-
+  filtro('peaking', 3200, -2, 1);
+  filtro('highpass', 70);
   if (c.fx?.tipo === 'robo') {
     const osc = ctx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = 48;
     const mod = ctx.createGain(); mod.gain.value = .45;
     const ring = ctx.createGain(); ring.gain.value = .85;
     osc.connect(mod); mod.connect(ring.gain); osc.start(0);
     ligar(ring); filtro('bandpass', 1400, 0, 1.4);
-  } else if (c.fx?.tipo === 'banda') {
-    filtro('bandpass', c.fx.f, 0, c.fx.q);
-  }
-
-  filtro('lowpass', c.soft);               // "Suavidade": corta agudos duros
-
+  } else if (c.fx?.tipo === 'banda') filtro('bandpass', c.fx.f, 0, c.fx.q);
+  filtro('lowpass', c.soft);
   if (c.comp) {
     const k = ctx.createDynamicsCompressor();
     k.threshold.value = -28; k.knee.value = 20; k.ratio.value = 3; k.attack.value = .01; k.release.value = .2;
     ligar(k);
   }
-
   no.connect(ctx.destination);
   if (c.rev > 0) {
     const conv = ctx.createConvolver(); conv.buffer = criarIR(ctx);
@@ -251,8 +286,6 @@ async function processarVoz(audio, sr, c) {
   }
   src.start(0);
   const out = await ctx.startRendering();
-
-  // normaliza o volume para ~-1 dB (compressor e filtros mudam o nível)
   const d = out.getChannelData(0); let pico = 0;
   for (let i = 0; i < d.length; i++) pico = Math.max(pico, Math.abs(d[i]));
   if (pico > 0) { const g = .89 / pico; for (let i = 0; i < d.length; i++) d[i] *= g; }
@@ -281,17 +314,21 @@ function carregarLame() {
     document.head.appendChild(s);
   });
 }
+const respirar = () => new Promise(r => setTimeout(r));
 async function paraMp3(buffer) {
   await carregarLame();
   const f = buffer.getChannelData(0), pcm = new Int16Array(f.length);
   for (let i = 0; i < f.length; i++) { const x = Math.max(-1, Math.min(1, f[i])); pcm[i] = x < 0 ? x * 0x8000 : x * 0x7FFF; }
   const enc = new lamejs.Mp3Encoder(1, buffer.sampleRate, 96), partes = [];
-  for (let i = 0; i < pcm.length; i += 1152) { const b = enc.encodeBuffer(pcm.subarray(i, i + 1152)); if (b.length) partes.push(b); }
+  for (let i = 0, k = 0; i < pcm.length; i += 1152, k++) {
+    const b = enc.encodeBuffer(pcm.subarray(i, i + 1152)); if (b.length) partes.push(b);
+    if (k % 60 === 0) await respirar();   // deixa a tela responder durante a conversão
+  }
   const fim = enc.flush(); if (fim.length) partes.push(fim);
   return new Blob(partes, { type: 'audio/mpeg' });
 }
 
-// ---------- Lista de resultados ----------
+// ---------- Resultados ----------
 function adicionarItem(lote, blob, nome, ext, cfg) {
   const url = URL.createObjectURL(blob), arquivo = `${nome}.${ext}`;
   const el = document.createElement('div'); el.className = 'item';
@@ -299,83 +336,73 @@ function adicionarItem(lote, blob, nome, ext, cfg) {
   el.querySelector('p').textContent = cfg.nome;
   const au = el.querySelector('audio'); au.src = url;
   au.addEventListener('play', () => document.querySelectorAll('#lista audio').forEach(x => { if (x !== au) x.pause(); }));
-  el.querySelector('.us').onclick = () => { aplicarPreset(cfg); $('status').textContent = `🎚️ Controles ajustados para "${cfg.nome}". Pode salvar com um nome.`; };
   const a = el.querySelector('.dl'); a.href = url; a.download = arquivo; a.textContent = `⬇️ Salvar (${arquivo})`;
+  el.querySelector('.us').onclick = () => { aplicarPreset(cfg); st.textContent = `🎚️ Controles ajustados para "${cfg.nome}". Pode salvar com um nome.`; };
   el.querySelector('.sh').onclick = async () => {
     const file = new File([blob], arquivo, { type: blob.type });
     if (navigator.canShare?.({ files: [file] })) {
       try { await navigator.share({ files: [file], title: arquivo }); }
       catch (e) { if (e.name !== 'AbortError') a.click(); }
-    } else { $('status').textContent = '⚠️ Compartilhamento direto não suportado aqui. Salvando no dispositivo...'; a.click(); }
+    } else { st.textContent = '⚠️ Compartilhamento direto não suportado aqui. Salvando no dispositivo...'; a.click(); }
   };
   el.querySelector('.rm').onclick = () => { URL.revokeObjectURL(url); el.remove(); };
   lote.appendChild(el);
 }
 
 // ---------- Geração ----------
-let sint = null;
 $('btnGerar').onclick = async () => {
   const linhas = $('texto').value.split('\n').map(l => l.trim()).filter(Boolean);
-  const st = $('status'), btn = $('btnGerar');
+  const btn = $('btnGerar');
   if (!linhas.length) { st.textContent = 'Digite algum texto antes de gerar.'; return; }
   if (!window.OfflineAudioContext) { st.textContent = '❌ Seu navegador não suporta processamento de áudio.'; return; }
 
   btn.disabled = true;
   try {
-    if (!sint) {
-      st.textContent = '⏳ Baixando modelo de voz em português (só na 1ª vez)...';
-      const arqs = {};
-      const wd = setTimeout(() => { st.textContent = '⏳ Ainda iniciando o motor de voz... se passar de 3 min, recarregue a página (o download fica em cache).'; }, 120000);
-      sint = await pipeline('text-to-speech', 'Xenova/mms-tts-por', {
-        device: 'wasm',
-        progress_callback: i => {
-          if (i.status === 'progress' && i.total) {
-            arqs[i.file] = { l: i.loaded, t: i.total };
-            let l = 0, t = 0; for (const k in arqs) { l += arqs[k].l; t += arqs[k].t; }
-            st.textContent = `⏳ Baixando voz: ${Math.round(l / t * 100)}% (${(l / 1048576).toFixed(0)} de ${(t / 1048576).toFixed(0)} MB)`;
-          } else if (i.status === 'done') {
-            if (arqs[i.file]) arqs[i.file].l = arqs[i.file].t;
-            if (Object.values(arqs).every(a => a.l >= a.t)) st.textContent = '⚙️ Download concluído. Iniciando o motor de voz... (pode levar 1–2 min no celular, aguarde)';
-          } else if (i.status === 'ready') st.textContent = '✅ Motor de voz pronto!';
-        }
-      });
-      clearTimeout(wd);
-    }
     const formato = $('formato').value, todas = [...PRESETS, ...custom];
     let cfgs = $('multi').checked ? todas.filter(p => sel.has(p.id)) : [];
     if (!cfgs.length) cfgs = [{ id: ativoId, nome: (todas.find(p => p.id === ativoId) || { nome: '🎲 Voz única' }).nome, ...lerAtual() }];
+
+    const partesPor = linhas.map(l => baseCache.has(l) ? null : dividirTexto(l));
+    const total = partesPor.reduce((s, p) => s + (p ? p.length : 0), 0) + linhas.length * cfgs.length;
+    let feito = 0;
+
+    st.textContent = '⏳ Preparando a voz...'; setBar(0);
+    await carregarModelo();
+    setBar(0);
+
     for (let n = 0; n < linhas.length; n++) {
       let j = baseCache.get(linhas[n]);
       if (!j) {
-      const partes = dividirTexto(linhas[n]), audios = [];
-      for (let i = 0; i < partes.length; i++) {
-        st.textContent = `🎙️ Áudio ${n + 1}/${linhas.length} — parte ${i + 1}/${partes.length}...`;
-        const s = await sint(partes[i]);
-        s.audio = fade(s.audio, s.sampling_rate);
-        audios.push(s);
-      }
-      j = juntar(audios);
-      if (baseCache.size > 20) baseCache.clear();
-      baseCache.set(linhas[n], j);
+        const partes = partesPor[n], audios = [];
+        for (let i = 0; i < partes.length; i++) {
+          st.textContent = `🎙️ Criando a fala — texto ${n + 1}/${linhas.length}, parte ${i + 1}/${partes.length} (${Math.round(feito / total * 100)}%)`;
+          const r = await chamar({ t: 'gen', id: ++seq, text: partes[i] });
+          audios.push({ audio: fade(r.audio, r.sr), sampling_rate: r.sr });
+          setBar(++feito / total);
+        }
+        j = juntar(audios);
+        if (baseCache.size > 20) baseCache.clear();
+        baseCache.set(linhas[n], j);
       }
       const lote = document.createElement('div'); lote.className = 'lote';
       const h = document.createElement('h3'); h.textContent = `"${linhas[n].slice(0, 60)}${linhas[n].length > 60 ? '…' : ''}"`;
       lote.appendChild(h); $('lista').prepend(lote);
+
       for (const cfg of cfgs) {
-        st.textContent = `🎛️ ${cfg.nome} (texto ${n + 1}/${linhas.length})...`;
+        st.textContent = `🎛️ Aplicando a voz ${cfg.nome} (${Math.round(feito / total * 100)}%)`;
         const buf = await processarVoz(j.audio, j.sampling_rate, cfg);
         let blob, ext = formato;
         if (formato === 'mp3') {
-          try { blob = await paraMp3(buf); }
-          catch { blob = paraWav(buf); ext = 'wav'; }
+          try { blob = await paraMp3(buf); } catch { blob = paraWav(buf); ext = 'wav'; }
         } else blob = paraWav(buf);
-        const nome = `${gerarNomeArquivo(linhas[n], linhas.length > 1 ? n + 1 : 0)}-${gerarNomeArquivo(cfg.nome, 0)}`;
-        adicionarItem(lote, blob, nome, ext, cfg);
+        adicionarItem(lote, blob, `${gerarNomeArquivo(linhas[n], linhas.length > 1 ? n + 1 : 0)}-${gerarNomeArquivo(cfg.nome, 0)}`, ext, cfg);
+        setBar(++feito / total);
       }
     }
+    setBar(1); setTimeout(() => setBar(null), 600);
     st.textContent = `✅ ${linhas.length * cfgs.length} áudio(s) pronto(s)! Toque em um por vez para comparar e baixe o melhor.`;
   } catch (e) {
-    console.error(e);
+    console.error(e); setBar(null);
     st.textContent = `❌ Erro: ${e.message}`;
   } finally { btn.disabled = false; }
 };
